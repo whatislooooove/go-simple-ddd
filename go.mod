@@ -1,6 +1,6 @@
 module go-echo-template
 
-go 1.23
+go 1.25
 
 require (
 	github.com/getkin/kin-openapi v0.127.0
