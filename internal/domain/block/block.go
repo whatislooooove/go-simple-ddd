@@ -2,19 +2,33 @@ package block
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/gob"
+	"go-ddd-template/internal/domain/transaction"
 	"log"
 )
 
 type Block struct {
-	Hash     []byte
-	Data     []byte
-	PrevHash []byte
-	Nonce    int
+	Hash         []byte
+	Transactions []*transaction.Transaction
+	PrevHash     []byte
+	Nonce        int
 }
 
-func CreateBlock(data string, prevHash []byte) *Block {
-	block := &Block{[]byte{}, []byte(data), prevHash, 0}
+func (block *Block) HasTransactions() []byte {
+	var txHashes [][]byte
+	var txHash [32]byte
+
+	for _, tx := range block.Transactions {
+		txHashes = append(txHashes, tx.ID)
+	}
+	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+
+	return txHash[:]
+}
+
+func CreateBlock(txs []*transaction.Transaction, prevHash []byte) *Block {
+	block := &Block{[]byte{}, txs, prevHash, 0}
 	proof := NewProofOfWork(block)
 	nonce, hash := proof.Run()
 
@@ -24,8 +38,8 @@ func CreateBlock(data string, prevHash []byte) *Block {
 	return block
 }
 
-func CreateGenesisBlock() *Block {
-	return CreateBlock("Genesis", []byte{})
+func CreateGenesisBlock(coinbase *transaction.Transaction) *Block {
+	return CreateBlock([]*transaction.Transaction{coinbase}, []byte{})
 }
 
 func (b *Block) Serialize() []byte {
