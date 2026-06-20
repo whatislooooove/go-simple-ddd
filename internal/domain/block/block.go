@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/gob"
+	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
-	"log"
 )
 
 type Block struct {
@@ -48,7 +48,7 @@ func (b *Block) Serialize() []byte {
 
 	err := encoder.Encode(b)
 
-	HandleError(err)
+	shared.HandleError(err)
 
 	return res.Bytes()
 }
@@ -59,14 +59,7 @@ func Deserialize(data []byte) *Block {
 	decoder := gob.NewDecoder(bytes.NewReader(data))
 	err := decoder.Decode(&block)
 
-	HandleError(err)
+	shared.HandleError(err)
 
 	return &block
-}
-
-// HandleError TODO: стоит вынести отсюда
-func HandleError(err error) {
-	if err != nil {
-		log.Panic(err)
-	}
 }

@@ -2,6 +2,7 @@ package chain
 
 import (
 	bitem "go-ddd-template/internal/domain/block"
+	"go-ddd-template/internal/domain/shared"
 
 	"github.com/dgraph-io/badger"
 )
@@ -20,13 +21,13 @@ func (iter *BlockChainIterator) Next() *bitem.Block {
 
 	err := iter.Database.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(iter.CurrentHash)
-		bitem.HandleError(err)
+		shared.HandleError(err)
 		encodedBlock, err := item.ValueCopy(nil)
 		block = bitem.Deserialize(encodedBlock)
 
 		return err
 	})
-	bitem.HandleError(err)
+	shared.HandleError(err)
 
 	iter.CurrentHash = block.PrevHash
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	bentry "go-ddd-template/internal/domain/block"
 	bchain "go-ddd-template/internal/domain/chain"
+	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
 	"os"
 	runtime2 "runtime"
@@ -45,19 +46,19 @@ func (cli *CommandLine) run() {
 	switch os.Args[1] {
 	case "getbalance":
 		err := getBalanceCmd.Parse(os.Args[2:])
-		bentry.HandleError(err)
+		shared.HandleError(err)
 
 	case "createblockchain":
 		err := createBlockchainCmd.Parse(os.Args[2:])
-		bentry.HandleError(err)
+		shared.HandleError(err)
 
 	case "send":
 		err := sendCmd.Parse(os.Args[2:])
-		bentry.HandleError(err)
+		shared.HandleError(err)
 
 	case "print":
 		err := printChainCmd.Parse(os.Args[2:])
-		bentry.HandleError(err)
+		shared.HandleError(err)
 
 	default:
 		cli.Help()
@@ -140,7 +141,7 @@ func (cli *CommandLine) send(from, to string, amount int) {
 	chain := bchain.ContinueBlockChain(from)
 	defer chain.DataBase.Close()
 
-	tx := transaction.NewTransaction(from, to, amount, chain)
+	tx := bchain.NewTransaction(from, to, amount, chain)
 	chain.AddBlock([]*transaction.Transaction{tx})
 	fmt.Println("Success! Transaction executed")
 }

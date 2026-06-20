@@ -4,7 +4,9 @@ import (
 	"encoding/hex"
 	"fmt"
 	"go-ddd-template/internal/domain/block"
+	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
+	"log"
 	"os"
 	runtime2 "runtime"
 )
@@ -26,18 +28,18 @@ func (chain *BlockChain) AddBlock(transactions []*transaction.Transaction) {
 
 	err := chain.DataBase.View(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("last-hash"))
-		block.HandleError(err)
+		shared.HandleError(err)
 		lastHash, err = item.ValueCopy(nil)
 
 		return err
 	})
-	block.HandleError(err)
+	shared.HandleError(err)
 
 	newBlock := block.CreateBlock(transactions, lastHash)
 
 	err = chain.DataBase.Update(func(txn *badger.Txn) error {
 		err := txn.Set(newBlock.Hash, newBlock.Serialize())
-		block.HandleError(err)
+		shared.HandleError(err)
 
 		err = txn.Set([]byte("last-hash"), newBlock.Hash)
 
@@ -45,7 +47,7 @@ func (chain *BlockChain) AddBlock(transactions []*transaction.Transaction) {
 
 		return err
 	})
-	block.HandleError(err)
+	shared.HandleError(err)
 }
 
 func DBExists() bool {
@@ -68,7 +70,7 @@ func InitBlockChain(address string) *BlockChain {
 	opts.ValueDir = dbPath
 
 	db, err := badger.Open(opts)
-	block.HandleError(err)
+	shared.HandleError(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
 		cbtx := transaction.CoinbaseTx(address, genesisData)
@@ -76,22 +78,22 @@ func InitBlockChain(address string) *BlockChain {
 		fmt.Println("Genesis block created")
 
 		err := txn.Set(genesis.Hash, genesis.Serialize())
-		block.HandleError(err)
+		shared.HandleError(err)
 		err = txn.Set([]byte("last-hash"), genesis.Hash)
-		block.HandleError(err)
+		shared.HandleError(err)
 
 		lastHash = genesis.Hash
 
 		return err
 	})
 
-	block.HandleError(err)
+	shared.HandleError(err)
 
 	return &BlockChain{lastHash, db}
 }
 
 func ContinueBlockChain(address string) *BlockChain {
-	if DBExists() {
+	if DBExists() == false {
 		fmt.Println("Blockchain already exists")
 		runtime2.Goexit()
 	}
@@ -102,16 +104,16 @@ func ContinueBlockChain(address string) *BlockChain {
 	opts.ValueDir = dbPath
 
 	db, err := badger.Open(opts)
-	block.HandleError(err)
+	shared.HandleError(err)
 
 	err = db.Update(func(txn *badger.Txn) error {
 		item, err := txn.Get([]byte("last-hash"))
-		block.HandleError(err)
+		shared.HandleError(err)
 		lastHash, err = item.ValueCopy(nil)
 
 		return err
 	})
-	block.HandleError(err)
+	shared.HandleError(err)
 
 	return &BlockChain{lastHash, db}
 }
@@ -194,4 +196,36 @@ Work:
 	}
 
 	return accumulated, unspentOuts
+}
+
+func NewTransaction(from, to string, amount int, chain *BlockChain) *transaction.Transaction {
+	var inputs []transaction.TxInput
+	var outputs []transaction.TxOutput
+
+	acc, validOutputs := chain.FindSpendableOutputs(from, amount)
+
+	if acc < amount {
+		log.Panic("Not enough funds")
+	}
+
+	for txid, outs := range validOutputs {
+		txID, err := hex.DecodeString(txid)
+		shared.HandleError(err)
+
+		for _, out := range outs {
+			input := transaction.TxInput{txID, out, from}
+			inputs = append(inputs, input)
+		}
+	}
+
+	outputs = append(outputs, transaction.TxOutput{amount, to})
+
+	if acc > amount {
+		outputs = append(outputs, transaction.TxOutput{acc - amount, from})
+	}
+
+	tx := transaction.Transaction{nil, inputs, outputs}
+	tx.SetID()
+
+	return &tx
 }
