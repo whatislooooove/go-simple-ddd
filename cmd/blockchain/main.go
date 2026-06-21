@@ -7,6 +7,7 @@ import (
 	bchain "go-ddd-template/internal/domain/chain"
 	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
+	wallet "go-ddd-template/internal/domain/wallet"
 	"os"
 	runtime2 "runtime"
 	"strconv"
@@ -20,6 +21,8 @@ func (cli *CommandLine) Help() {
 	fmt.Println(" createblockchain -address {address} - Creates a new blockchain}")
 	fmt.Println(" printchain - Prints the blocks in the blockchain")
 	fmt.Println(" send -from {from} -to {to} -amount {amount} - Send amount from")
+	fmt.Println(" createwallet - Creates a new wallet")
+	fmt.Println(" listaddresses - Lists the addresses in our wallet file")
 }
 
 func (cli *CommandLine) ValidateArgs() {
@@ -30,12 +33,15 @@ func (cli *CommandLine) ValidateArgs() {
 }
 
 func (cli *CommandLine) run() {
+	// todo тоже стоит куда то вынести
 	cli.ValidateArgs()
 
 	getBalanceCmd := flag.NewFlagSet("getbalance", flag.ExitOnError)
 	createBlockchainCmd := flag.NewFlagSet("createblockchain", flag.ExitOnError)
 	sendCmd := flag.NewFlagSet("send", flag.ExitOnError)
 	printChainCmd := flag.NewFlagSet("print", flag.ExitOnError)
+	createWalletCmd := flag.NewFlagSet("createwallet", flag.ExitOnError)
+	listAddressesCmd := flag.NewFlagSet("listaddresses", flag.ExitOnError)
 
 	getBalanceAddress := getBalanceCmd.String("address", "", "The address to get balance for")
 	createBlockchainAddress := createBlockchainCmd.String("address", "", "The address to createblockchain for")
@@ -56,6 +62,13 @@ func (cli *CommandLine) run() {
 		err := sendCmd.Parse(os.Args[2:])
 		shared.HandleError(err)
 
+	case "createwallet":
+		err := createWalletCmd.Parse(os.Args[2:])
+		shared.HandleError(err)
+
+	case "listaddresses":
+		err := listAddressesCmd.Parse(os.Args[2:])
+		shared.HandleError(err)
 	case "print":
 		err := printChainCmd.Parse(os.Args[2:])
 		shared.HandleError(err)
@@ -93,6 +106,14 @@ func (cli *CommandLine) run() {
 
 	if printChainCmd.Parsed() {
 		cli.printChain()
+	}
+
+	if createWalletCmd.Parsed() {
+		cli.createWallet()
+	}
+
+	if listAddressesCmd.Parsed() {
+		cli.listAddresses()
 	}
 }
 
@@ -144,6 +165,23 @@ func (cli *CommandLine) send(from, to string, amount int) {
 	tx := bchain.NewTransaction(from, to, amount, chain)
 	chain.AddBlock([]*transaction.Transaction{tx})
 	fmt.Println("Success! Transaction executed")
+}
+
+func (cli *CommandLine) listAddresses() {
+	wallets, _ := wallet.CreateWallets()
+	addresses := wallets.GetAllAddresses()
+
+	for _, address := range addresses {
+		fmt.Println(address)
+	}
+}
+
+func (cli *CommandLine) createWallet() {
+	wallets, _ := wallet.CreateWallets()
+	address := wallets.AddWallet()
+	wallets.SaveFile()
+
+	fmt.Printf("Created new wallet with address %s\n", address)
 }
 
 func main() {
