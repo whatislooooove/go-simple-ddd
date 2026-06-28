@@ -97,7 +97,7 @@ func InitBlockChain(address string) *BlockChain {
 }
 
 func ContinueBlockChain(address string) *BlockChain {
-	if DBExists() == false {
+	if DBExists() != false {
 		fmt.Println("Blockchain already exists")
 		runtime2.Goexit()
 	}

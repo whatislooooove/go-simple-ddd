@@ -6,8 +6,11 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"go-ddd-template/internal/domain/shared"
+	"math/big"
 
 	"golang.org/x/crypto/ripemd160"
 )
@@ -20,6 +23,47 @@ const (
 type Wallet struct {
 	PrivateKey ecdsa.PrivateKey
 	PublicKey  []byte
+}
+
+// WalletJSON TODO: вникнуть в работу по сериализации для json - в методы тоже
+type WalletJSON struct {
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
+}
+
+func (w *Wallet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(WalletJSON{
+		PrivateKey: hex.EncodeToString(w.PrivateKey.D.Bytes()),
+		PublicKey:  hex.EncodeToString(w.PublicKey),
+	})
+}
+
+func (w *Wallet) UnmarshalJSON(data []byte) error {
+	var aux WalletJSON
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	privateKeyBytes, err := hex.DecodeString(aux.PrivateKey)
+	if err != nil {
+		return err
+	}
+
+	publicKeyBytes, err := hex.DecodeString(aux.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	curve := elliptic.P256()
+	privateKey := new(ecdsa.PrivateKey)
+	privateKey.PublicKey.Curve = curve
+	privateKey.D = new(big.Int).SetBytes(privateKeyBytes)
+	privateKey.PublicKey.X, privateKey.PublicKey.Y = curve.ScalarBaseMult(privateKeyBytes)
+
+	w.PrivateKey = *privateKey
+	w.PublicKey = publicKeyBytes
+
+	return nil
 }
 
 func (w *Wallet) MakeAddress() []byte {

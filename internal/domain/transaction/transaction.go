@@ -114,7 +114,7 @@ func (tx *Transaction) Sign(privateKey ecdsa.PrivateKey, prevTXs map[string]Tran
 	}
 
 	for _, in := range tx.Inputs {
-		if prevTXs[hex.EncodeToString(in.ID)].ID != nil {
+		if prevTXs[hex.EncodeToString(in.ID)].ID == nil {
 			log.Panic("Error: previous transaction does not exist")
 		}
 	}
