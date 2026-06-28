@@ -8,6 +8,7 @@ import (
 	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
 	wallet "go-ddd-template/internal/domain/wallet"
+	"log"
 	"os"
 	runtime2 "runtime"
 	"strconv"
@@ -130,6 +131,9 @@ func (cli *CommandLine) printChain() {
 
 		pow := bentry.NewProofOfWork(block)
 		fmt.Printf("PoW hash: %s\n", strconv.FormatBool(pow.Validate()))
+		for _, tx := range block.Transactions {
+			fmt.Println(tx)
+		}
 		fmt.Println()
 
 		if len(block.PrevHash) == 0 {
@@ -145,11 +149,18 @@ func (cli *CommandLine) createBlockChain(address string) {
 }
 
 func (cli *CommandLine) getBalance(address string) {
+	// TODO:вынести проверку
+	if !wallet.ValidateAddress(address) {
+		log.Panic("Invalid address")
+	}
+
 	chain := bchain.ContinueBlockChain(address)
 	defer chain.DataBase.Close()
 
 	balance := 0
-	UTXOs := chain.FindUTXO(address)
+	pubKeyHash := wallet.Base58Decode([]byte(address))
+	pubKeyHash = pubKeyHash[1 : len(pubKeyHash)-4]
+	UTXOs := chain.FindUTXO(pubKeyHash)
 
 	for _, out := range UTXOs {
 		balance += out.Value
@@ -159,6 +170,7 @@ func (cli *CommandLine) getBalance(address string) {
 }
 
 func (cli *CommandLine) send(from, to string, amount int) {
+	// TODO: исправить отправку токенов
 	chain := bchain.ContinueBlockChain(from)
 	defer chain.DataBase.Close()
 
