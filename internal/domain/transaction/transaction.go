@@ -27,6 +27,10 @@ type TxOutput struct {
 	PubKeyHash []byte
 }
 
+type TxOutputs struct {
+	Outputs []TxOutput
+}
+
 type TxInput struct {
 	ID        []byte
 	Out       int
@@ -213,4 +217,22 @@ func (tx Transaction) String() string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func (Outs TxOutputs) Serialize() []byte {
+	var buff bytes.Buffer
+	encode := gob.NewEncoder(&buff)
+	err := encode.Encode(Outs)
+	shared.HandleError(err)
+
+	return buff.Bytes()
+}
+
+func DeserializeOutputs(data []byte) TxOutputs {
+	var outputs TxOutputs
+	decode := gob.NewDecoder(bytes.NewReader(data))
+	err := decode.Decode(&outputs)
+	shared.HandleError(err)
+
+	return outputs
 }

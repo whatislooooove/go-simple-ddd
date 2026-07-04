@@ -298,6 +298,7 @@ send -from {from} -to {to} -amount {amount}
 - [ ] Исправить `ContinueBlockChain()` — `DBExists() == false` → `DBExists() == true`
 - [ ] Добавить проверку `w != nil` в `NewTransaction()`
 - [ ] Добавить валидацию подписей в `AddBlock()`
+- [ ] Подумать, как можно разбить большие файлы (>150 строк)
 
 ### Важно (архитектура)
 - [ ] Убрать `block.HandleError`, использовать только `shared.HandleError`
