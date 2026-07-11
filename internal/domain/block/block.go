@@ -2,7 +2,6 @@ package block
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/gob"
 	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
@@ -15,16 +14,15 @@ type Block struct {
 	Nonce        int
 }
 
-func (block *Block) HasTransactions() []byte {
+func (block *Block) HashTransactions() []byte {
 	var txHashes [][]byte
-	var txHash [32]byte
 
 	for _, tx := range block.Transactions {
-		txHashes = append(txHashes, tx.ID)
+		txHashes = append(txHashes, tx.Serialize())
 	}
-	txHash = sha256.Sum256(bytes.Join(txHashes, []byte{}))
+	tree := NewMerkleTree(txHashes)
 
-	return txHash[:]
+	return tree.RootNode.Data
 }
 
 func CreateBlock(txs []*transaction.Transaction, prevHash []byte) *Block {
