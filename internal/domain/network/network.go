@@ -3,6 +3,7 @@ package network
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"go-ddd-template/internal/domain/block"
 	"go-ddd-template/internal/domain/chain"
@@ -217,15 +218,162 @@ func HandleBlock(request []byte, bchain *chain.BlockChain) {
 	}
 }
 
-func HandleConnection(conn net.Conn, chain *chain.BlockChain) {
-	req, err := ioutil.ReadAll(conn)
-	defer conn.Close()
+func HandleGetBlocks(request []byte, bchain *chain.BlockChain) {
+	var buff bytes.Buffer
+	var payload GetBlocks
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
 	shared.HandleError(err)
 
+	blocks := bchain.GetBlockHashes()
+	SendInv(payload.AddrFrom, "block", blocks)
+}
+
+func HandleGetData(request []byte, bchain *chain.BlockChain) {
+	var buff bytes.Buffer
+	var payload GetData
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
+	shared.HandleError(err)
+
+	if payload.Type == "block" {
+		block, err := bchain.GetBlock([]byte(payload.ID))
+		if err != nil {
+			return
+		}
+
+		SendBlock(payload.AddrFrom, &block)
+	}
+
+	if payload.Type == "tx" {
+		txID := hex.EncodeToString(payload.ID)
+		tx := memoryPool[txID]
+
+		SendTx(payload.AddrFrom, &tx)
+	}
+}
+
+func HandleVersion(request []byte, bchain *chain.BlockChain) {
+	var buff bytes.Buffer
+	var payload Version
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	bestHeight := bchain.GetBestHeight()
+	otherHeight := payload.BestHeight
+
+	if bestHeight < otherHeight {
+		SendGetBlocks(payload.AddrFrom)
+	} else if bestHeight > otherHeight {
+		SendVersion(payload.AddrFrom, bchain)
+	}
+
+	if !NodeIsKnown(payload.AddrFrom) {
+		KnownNodes = append(KnownNodes, payload.AddrFrom)
+	}
+}
+
+func HandleTx(request []byte, bchain *chain.BlockChain) {
+	var buff bytes.Buffer
+	var payload Tx
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	txData := payload.Transaction
+	tx := chain.DeserializeTransaction(txData)
+	memoryPool[hex.EncodeToString(tx.ID)] = tx
+
+	fmt.Printf("%s, %d", nodeAddress, len(memoryPool))
+
+	if nodeAddress == KnownNodes[0] {
+		for _, node := range KnownNodes {
+			if node != nodeAddress && node != payload.AddrFrom {
+				SendInv(node, "tx", [][]byte{tx.ID})
+			}
+		}
+	} else {
+		if len(memoryPool) >= 2 && len(mineAddress) > 0 {
+			MineTx(bchain)
+		}
+	}
+}
+
+func HandleInv(request []byte, bchain *chain.BlockChain) {
+	var buff bytes.Buffer
+	var payload Inv
+
+	buff.Write(request[commandLength:])
+	dec := gob.NewDecoder(&buff)
+	err := dec.Decode(&payload)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	fmt.Printf("Recevied inventory with %d %s\n", len(payload.Items), payload.Type)
+
+	if payload.Type == "block" {
+		blocksInTransit = payload.Items
+
+		blockHash := payload.Items[0]
+		SendGetData(payload.AddrFrom, "block", blockHash)
+
+		newInTransit := [][]byte{}
+		for _, b := range blocksInTransit {
+			if bytes.Compare(b, blockHash) != 0 {
+				newInTransit = append(newInTransit, b)
+			}
+		}
+		blocksInTransit = newInTransit
+	}
+
+	if payload.Type == "tx" {
+		txID := payload.Items[0]
+
+		if memoryPool[hex.EncodeToString(txID)].ID == nil {
+			SendGetData(payload.AddrFrom, "tx", txID)
+		}
+	}
+}
+
+func HandleConnection(conn net.Conn, bchain *chain.BlockChain) {
+	req, err := ioutil.ReadAll(conn)
+	defer conn.Close()
+
+	if err != nil {
+		log.Panic(err)
+	}
 	command := BytesToCmd(req[:commandLength])
-	fmt.Println("Recieved %s command", command)
+	fmt.Printf("Received %s command\n", command)
 
 	switch command {
+	case "addr":
+		HandleAddr(req)
+	case "block":
+		HandleBlock(req, bchain)
+	case "inv":
+		HandleInv(req, bchain)
+	case "getblocks":
+		HandleGetBlocks(req, bchain)
+	case "getdata":
+		HandleGetData(req, bchain)
+	case "tx":
+		HandleTx(req, bchain)
+	case "version":
+		HandleVersion(req, bchain)
 	default:
 		fmt.Println("Unknown command")
 	}
@@ -247,6 +395,57 @@ func RequestBlocks() {
 	}
 }
 
+func NodeIsKnown(addr string) bool {
+	for _, node := range KnownNodes {
+		if node == addr {
+			return true
+		}
+	}
+
+	return false
+}
+
+func MineTx(bchain *chain.BlockChain) {
+	var txs []*transaction.Transaction
+
+	for id := range memoryPool {
+		fmt.Printf("tx: %s\n", memoryPool[id].ID)
+		tx := memoryPool[id]
+		if bchain.VerifyTransaction(&tx) {
+			txs = append(txs, &tx)
+		}
+	}
+
+	if len(txs) == 0 {
+		fmt.Println("All Transactions are invalid")
+		return
+	}
+
+	cbTx := transaction.CoinbaseTx(mineAddress, "")
+	txs = append(txs, cbTx)
+
+	newBlock := bchain.MineBlock(txs)
+	UTXOSet := chain.UTXOSet{bchain}
+	UTXOSet.Reindex()
+
+	fmt.Println("New Block mined")
+
+	for _, tx := range txs {
+		txID := hex.EncodeToString(tx.ID)
+		delete(memoryPool, txID)
+	}
+
+	for _, node := range KnownNodes {
+		if node != nodeAddress {
+			SendInv(node, "block", [][]byte{newBlock.Hash})
+		}
+	}
+
+	if len(memoryPool) > 0 {
+		MineTx(bchain)
+	}
+}
+
 func CloseDB(chain chain.BlockChain) {
 	d := death.NewDeath(syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 
@@ -255,4 +454,29 @@ func CloseDB(chain chain.BlockChain) {
 		defer runtime.Goexit()
 		chain.DataBase.Close()
 	})
+}
+
+func StartServer(nodeID, minerAddress string) {
+	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
+	mineAddress = minerAddress
+	ln, err := net.Listen(protocol, nodeAddress)
+	if err != nil {
+		log.Panic(err)
+	}
+	defer ln.Close()
+
+	bchain := chain.ContinueBlockChain(nodeID)
+	defer bchain.DataBase.Close()
+	go CloseDB(*bchain)
+
+	if nodeAddress != KnownNodes[0] {
+		SendVersion(KnownNodes[0], bchain)
+	}
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Panic(err)
+		}
+		go HandleConnection(conn, bchain)
+	}
 }
