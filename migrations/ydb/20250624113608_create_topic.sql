@@ -12,3 +12,4 @@ CREATE TOPIC `order_processing` (
 -- +goose StatementBegin
 DROP TOPIC `order_processing`;
 -- +goose StatementEnd
+-- тоже пример миграций

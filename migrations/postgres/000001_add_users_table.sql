@@ -12,3 +12,4 @@ CREATE TABLE users (
 -- +goose StatementBegin
 DROP TABLE users;
 -- +goose StatementEnd
+-- здесь просто пример миграций
