@@ -28,7 +28,7 @@ const (
 
 var (
 	nodeAddress     string
-	minerAddress    string
+	mineAddress     string
 	KnownNodes      = []string{"localhost:3000"}
 	blocksInTransit [][]byte
 	memoryPool      = make(map[string]transaction.Transaction)
@@ -294,7 +294,7 @@ func HandleTx(request []byte, bchain *chain.BlockChain) {
 	}
 
 	txData := payload.Transaction
-	tx := chain.DeserializeTransaction(txData)
+	tx := transaction.DeserializeTransaction(txData)
 	memoryPool[hex.EncodeToString(tx.ID)] = tx
 
 	fmt.Printf("%s, %d", nodeAddress, len(memoryPool))
@@ -458,7 +458,6 @@ func CloseDB(chain chain.BlockChain) {
 
 func StartServer(nodeID, minerAddress string) {
 	nodeAddress = fmt.Sprintf("localhost:%s", nodeID)
-	mineAddress = minerAddress
 	ln, err := net.Listen(protocol, nodeAddress)
 	if err != nil {
 		log.Panic(err)

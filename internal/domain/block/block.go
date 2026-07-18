@@ -5,13 +5,16 @@ import (
 	"encoding/gob"
 	"go-ddd-template/internal/domain/shared"
 	"go-ddd-template/internal/domain/transaction"
+	"time"
 )
 
 type Block struct {
+	Timestamp    int64
 	Hash         []byte
 	Transactions []*transaction.Transaction
 	PrevHash     []byte
 	Nonce        int
+	Height       int
 }
 
 func (block *Block) HashTransactions() []byte {
@@ -25,8 +28,8 @@ func (block *Block) HashTransactions() []byte {
 	return tree.RootNode.Data
 }
 
-func CreateBlock(txs []*transaction.Transaction, prevHash []byte) *Block {
-	block := &Block{[]byte{}, txs, prevHash, 0}
+func CreateBlock(txs []*transaction.Transaction, prevHash []byte, height int) *Block {
+	block := &Block{time.Now().Unix(), []byte{}, txs, prevHash, 0, height}
 	proof := NewProofOfWork(block)
 	nonce, hash := proof.Run()
 
@@ -37,7 +40,7 @@ func CreateBlock(txs []*transaction.Transaction, prevHash []byte) *Block {
 }
 
 func CreateGenesisBlock(coinbase *transaction.Transaction) *Block {
-	return CreateBlock([]*transaction.Transaction{coinbase}, []byte{})
+	return CreateBlock([]*transaction.Transaction{coinbase}, []byte{}, 0)
 }
 
 func (b *Block) Serialize() []byte {

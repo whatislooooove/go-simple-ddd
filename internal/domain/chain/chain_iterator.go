@@ -13,7 +13,9 @@ type BlockChainIterator struct {
 }
 
 func (chain *BlockChain) Iterator() *BlockChainIterator {
-	return &BlockChainIterator{chain.LastHash, chain.DataBase}
+	iter := &BlockChainIterator{chain.LastHash, chain.DataBase}
+
+	return iter
 }
 
 func (iter *BlockChainIterator) Next() *bitem.Block {
